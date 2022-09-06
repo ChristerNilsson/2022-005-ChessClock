@@ -20,6 +20,8 @@ player = -1 # -1, 0=left, 1=right
 clocks = [3*60,3*60] # sekunder med decimaler
 bonuses = [2,2] # sekunder med decimaler
 
+qr = null
+
 editPage = null
 mainPage = null
 page = null
@@ -27,27 +29,16 @@ page = null
 flip = () -> @value = 1 - @value
 swap = () -> editPage.hcpSwap = -editPage.hcpSwap
 
-left = -> 
-	if state == 0 then return 
-	if state == 1
-		state = 2
-		clocks[player] += bonuses[player]
-		player = 0
-		mainPage.buttons['pause'].visible = true
-
-right = ->
-	if state == 0 then return 
-	if state == 1
-		state = 2
-		clocks[player] += bonuses[player]
-		player = 1
-		mainPage.buttons['pause'].visible = true
-
-	# if state in [-2,2] then return
-	# state = 2
-	# clocks[player] += bonuses[player]
-	# player = 0
-	# mainPage.buttons['pause'].enabled = true
+left = -> add 0
+right = -> add 1
+add = (p) ->
+	#if state == 1
+		#state = 2
+	console.log clocks[player], bonuses[player]
+	clocks[player] += bonuses[player]
+	console.log clocks[player], bonuses[player]
+	player = p
+	mainPage.buttons['pause'].visible = true
 
 edit = -> 
 	if state == 0
@@ -71,25 +62,40 @@ ok = ->
 class MainPage
 	constructor : ->
 		@buttons = {}
-		@buttons['left'] =  new ButtonTime 0,120,40,230,60,left,true
-		@buttons['right'] = new ButtonTime 1,width-120,40,230,60,right,true
-		@buttons['play'] =  new Button 'play',250,100+40,100,40, pause, true, true
-		@buttons['pause'] = new Button 'pause',250,100+100,100,40, pause, false, true
-		@buttons['new'] =   new Button 'new',500,100+40,100,40, edit, true, true
+		w = width
+		h = height
+		@buttons['left'] =  new MainButton 0,  0.5*w,0.25*h,0.83*w,0.18*h, left,  true
+		@buttons['right'] = new MainButton 1,  0.5*w,0.75*h,0.83*w,0.18*h, right, true
+		@buttons['play'] =  new Button 'play', 0.1*w,0.50*h,0.17*w,0.11*h, pause, true,  true
+		@buttons['pause'] = new Button 'pause',0.3*w,0.50*h,0.17*w,0.11*h, pause, false, true
+		@buttons['new'] =   new Button 'new',  0.8*w,0.50*h,0.17*w,0.11*h, edit,  true,  true
+		@buttons['left'].upsidedown = true
 
 	draw : ->
 		push()
 		background 'black'
-		rectMode CENTER
-		textAlign CENTER,CENTER
 		@buttons[key].draw() for key of @buttons
-		if state == 2 and clocks[player] > 0 then clocks[player] -= 1/60
+		if state == 2 and clocks[player] > 0
+			clocks[player] -= 1/60
+			if clocks[player] < 0 then clocks[player] = 0
 		pop()
+		size = 0.11*height
+		if qr then image qr,(width-size)/2,(height-size)/2,size,size
+		fill 'white'
+		textSize 0.05 * height
+		if bonuses[0] > 0
+			push()
+			translate width/2,height/2-0.13*height
+			rotate 180
+			text '+'+round3(bonuses[0])+'s',0,0
+			pop()
+			text '+'+round3(bonuses[1])+'s',width/2,height/2+0.13*height
 
 	mouseClicked : ->
 		for key of @buttons
 			button = @buttons[key]
 			if not button.inside mouseX,mouseY then continue
+			if key in ['left','right'] then button.click()
 
 			if state==0
 				if key=='play' 
@@ -132,19 +138,19 @@ class MainPage
 class EditPage
 	constructor : ->
 		@matrix = []
-		yoff = 30
+		yoff = 0.08 * height
 		for j in range 6
 			headers = 'h m s m s t'.split ' '
 			cells = []
-			x = 50+j*60
-			dy = 40
-			cells.push new TimeButton headers[j],x,yoff+2*dy,flip,false
-			cells.push new TimeButton 1,         x,yoff+3*dy,flip,true
-			cells.push new TimeButton 2,         x,yoff+4*dy,flip,true
-			cells.push new TimeButton 4,         x,yoff+5*dy,flip,true
-			cells.push new TimeButton 8,         x,yoff+6*dy,flip,true
-			cells.push new TimeButton 15,        x,yoff+7*dy,flip,true
-			cells.push new TimeButton 30,        x,yoff+8*dy,flip,true
+			x = 0.17 * width + j*0.13 * width
+			dy = 0.09 * height
+			cells.push new EditButton headers[j],x,yoff+2*dy,flip,false
+			cells.push new EditButton 1,         x,yoff+3*dy,flip,true
+			cells.push new EditButton 2,         x,yoff+4*dy,flip,true
+			cells.push new EditButton 4,         x,yoff+5*dy,flip,true
+			cells.push new EditButton 8,         x,yoff+6*dy,flip,true
+			cells.push new EditButton 15,        x,yoff+7*dy,flip,true
+			cells.push new EditButton 30,        x,yoff+8*dy,flip,true
 			@matrix.push cells
 
 		# ställ in 3m+2s (default)
@@ -152,9 +158,16 @@ class EditPage
 		@matrix[1][2].value = 1
 		@matrix[4][2].value = 1
 
+		# ställ in 3h+2m (default)
+		# @matrix[0][1].value = 1
+		# @matrix[0][2].value = 1
+		# @matrix[3][2].value = 1
+
 		@buttons = []
-		@buttons.push new Button 'ok',500,350,100,40,ok,true,true
-		@buttons.push new Button 'swap',width/2,30,100,40,swap,true,true
+		w = width
+		h = height
+		@buttons.push new Button 'ok',  0.5*w, 0.89*h, 0.17*w, 0.04*h, ok,   true,true
+		@buttons.push new Button 'swap',0.5*w, 0.08*h, 0.17*w, 0.04*h, swap,true,true
 
 		@sums = [0,0,0,0,0,0]
 		@hcpSwap = 1
@@ -164,15 +177,13 @@ class EditPage
 		background 'black'
 
 		fill 'white'
-		textSize 32
-		text 'reflection',45,90
-		text 'bonus',212,90
-		text 'hcp',325,90
+		textSize 0.05 * height
+		text 'reflection',0.30*width, 0.18*height
+		text 'bonus',     0.63*width, 0.18*height
+		text 'hcp',       0.83*width, 0.18*height
 
 		fill 'white'
-		textSize 20
-		rectMode CENTER
-		textAlign CENTER,CENTER
+		textSize 0.03*height
 		headers = 'h m s m s t'.split ' '
 		@sums = [0,0,0,0,0,0]
 		for button in @buttons
@@ -183,10 +194,16 @@ class EditPage
 				button = cells[j]
 				button.draw()
 				if j != 0 then @sums[i] += button.text * button.value
-		header = ''
-		for i in range 6
-			if @sums[i]>0 then header += @sums[i] + headers[i]
-			if i==2 then header += ' + '
+		@buttons[0].visible = @sums[0] + @sums[1] + @sums[2] > 0
+
+		header0 = ''
+		header1 = ''
+		for i in range 0,3
+			if @sums[i]>0 then header0 += @sums[i] + headers[i]
+		for i in range 3,5
+			if @sums[i]>0 then header1 += @sums[i] + headers[i]
+		header = header0
+		if header1.length > 0 then header += ' + ' + header1
 
 		@hcp = @hcpSwap * @sums[5]/60 # 0.0 .. 1.0
 		@refl = 3600 * @sums[0] + 60 * @sums[1] + @sums[2] # sekunder
@@ -195,22 +212,23 @@ class EditPage
 		@players[0] = [@refl*(1+@hcp), @bonus*(1+@hcp)]
 		@players[1] = [@refl*(1-@hcp), @bonus*(1-@hcp)]
 
-		y = 30
+		y = 0.08 * height
 		if @sums[5] == 0 # inget handicap
 			@buttons[1].visible = false
 			fill 'white'
-			text header, width/2,y
+			textSize 0.07*height
+			text header, 0.5*width,y
 		else # handicap
 			@buttons[1].visible = true
 			fill 'red'
 			textAlign LEFT,CENTER
 			left   = pretty(@players[0][0]) + ' + ' + pretty(@players[0][1])
-			text left, 0,y
+			text left, 0,y-0.04*height
 
 			fill 'green'
 			textAlign RIGHT,CENTER
 			right  = pretty(@players[1][0]) + ' + ' + pretty(@players[1][1])
-			text right, width,y
+			text right, width,y+0.04*height
 		pop()
 
 	mouseClicked : ->
@@ -221,6 +239,7 @@ class EditPage
 				if button.visible and button.inside mouseX,mouseY then button.click()
 
 round3 = (x) -> Math.round(x*1000)/1000
+
 pretty = (tot) ->
 	s = tot % 60
 	tot = (tot - s) / 60
@@ -232,6 +251,20 @@ pretty = (tot) ->
 	if m>0 then header += round3(m) + 'm'
 	if s>0 then header += round3(s) + 's'
 	header
+
+d2 = (x) ->
+	x = Math.trunc x
+	if x < 10 then '0'+x else x
+console.log d2(3), '03'
+
+hms = (x) ->
+	s = x %% 60
+	x = x // 60
+	m = x %% 60
+	x = x // 60
+	h = x
+	[h,m,s]
+console.log hms(180), [0,3,0]
 
 ###############################
 
@@ -245,67 +278,63 @@ class Button
 			fill 'black'
 		else
 			fill 'white'
-		textSize 32
+		textSize 0.04*height
 		text @text,@x,@y
 
 	inside : (mx,my) -> @x-@width/2 < mx < @x+@width/2 and @y-@height/2 < my < @y+@height/2
-	click : -> @click()
 
-d2 = (x) ->
-	x = Math.round x
-	if x < 10 then "0" + x
-	else x
-
-class TimeButton extends Button # within EditPage
+class EditButton extends Button
 	constructor : (text,x,y,click,visible) ->
-		super text,x,y,30,30,click,visible
+		super text,x,y,0.05*width,0.03*height,click,visible
 		@value = 0
 
 	draw : ->
 		fill ['gray','yellow'][@value]
-		textSize 32
-		textAlign CENTER,CENTER
-		text @text,@x,@y
-		fill ['gray','yellow'][@value]
-		textSize 32
-		textAlign CENTER,CENTER
+		textSize 0.04*height
 		text @text,@x,@y
 
-class ButtonTime extends Button # within MainPage
+class MainButton extends Button
 	constructor : (@player,x,y,width,height,click,visible) ->
 		super "",x,y,width,height,click,visible
 
 	draw : ->
-		textSize 60
-		if state in [1,2] and player==-1 or player==@player
-			fill if @visible then 'white' else "black"
+		secs = clocks[@player]
+		if secs == 0 then fill 'red'
+		[h,m,s] = hms Math.trunc secs
+		ss = if h >= 1 then d2(h) + ':' + d2(m) else d2(m) + ':' + d2(s)
+
+		fill if @visible then 'white' else "black"
+		if state in [1,2] and player in [-1,@player]
 			rect @x,@y,@width,@height
 			fill if @visible then 'black' else "white"
-		else
-			fill if @visible then 'white' else "black"
-		s = clocks[@player]
-		#fill 'black'
-		text d2(s // 3600),@x-80,@y
-		text ':',@x-40,@y
-		text d2(s // 60),@x+0,@y
-		text ':',@x+40,@y
-		text d2(s %% 60),@x+80,@y
 
-	click : -> @click()
+		push()
+		translate @x,@y
+		if @upsidedown then rotate 180
+		textSize 0.22*height
+		text ss,0,0.017*height
+		pop()
 
 draw = -> 
-	push()
 	page.draw()
 
-	fill 'white' # DEBUG!
-	textSize 32
-	textAlign CENTER,CENTER
-	text "state:#{state}",  0.85*width,height/2
-	text "player:#{player}",0.85*width,height/2+50
+	push() # DEBUG!
+	fill 'gray'
+	textSize 0.03*height
+	text round3(clocks[0]), 0.2 * width, 0.95 * height
+	text "S:#{state}",      0.4 * width, 0.95 * height
+	text Math.round(frameRate()), 0.5 * width, 0.95 * height
+	text "P:#{player}",     0.6 * width, 0.95 * height
+	text round3(clocks[1]), 0.8 * width, 0.95 * height
 	pop()
 
+preload = -> qr = loadImage 'qr.png'
+
 setup = ->
-	createCanvas 600,400
+	createCanvas innerWidth,innerHeight
+	textAlign CENTER,CENTER
+	rectMode CENTER
+	angleMode DEGREES
 	editPage = new EditPage()
 	mainPage = new MainPage()
 	page = mainPage
